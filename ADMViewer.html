@@ -1,0 +1,229 @@
+<html>
+<head>
+  <title>ADM Viewer</title>
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.8.3/jquery.min.js"></script>
+  <script src="http://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.4.2/underscore-min.js"></script>
+  <script src="http://cdnjs.cloudflare.com/ajax/libs/backbone.js/0.9.9/backbone-min.js"></script>
+  <link href="http://netdna.bootstrapcdn.com/twitter-bootstrap/2.2.2/css/bootstrap-combined.min.css" rel="stylesheet">
+  <script src="http://netdna.bootstrapcdn.com/twitter-bootstrap/2.2.2/js/bootstrap.min.js"></script>
+  <link rel="stylesheet/less" type="text/css" href="./styles.less"/>
+  <script src="http://cdnjs.cloudflare.com/ajax/libs/less.js/1.3.1/less.min.js"></script>
+</head>  
+<body>
+  <div class="navbar navabar-fixed-top">
+    <div class="navbar-inner">
+      <div class="container"> <a class="brand" href="#">ADM Viewer</a></div>
+    </div>
+  </div>
+  <div id="main" class="container">
+
+  </div>
+
+  <script src="./data.json"></script>
+
+<script>
+// Person model functions
+function nameOf(person) {
+  if(_(person.Names).size() == 0) return '';
+  var name = _(person.Names).first();
+  if(name.g && name.s) return name.g + " " + name.s;
+  if(name.g) return name.g;
+  return name.s || "";
+}
+function idOf(identifiable) {
+  return identifiable.ID.v
+}
+</script>
+
+<script>
+var templates = {}
+var backPath = [];
+
+$(function(){
+  compile();
+  load(data);
+});
+
+function load(data) {
+  console.log(data);
+  var view = new ContainerView({model: data, el: $('#main')});
+  view.render();
+}
+
+function compile() {
+  _.templateSettings.variable= 'data';
+  $('script[type=template]').each(function(){
+    var id = this.id.replace("tmpl-","");
+    console.log('Compile: ' + id);
+    templates[id] = _.template($(this).html());
+  });
+}
+
+var BoxView = Backbone.View.extend({
+  render: function() {
+    this.$el.html(templates.box({
+      fields: this.fields,
+      obj: this.model
+    }));
+  }
+});
+
+var PersonBoxView = BoxView.extend({
+  events: {
+    'click': 'enter'
+  },
+  fields: {
+    'ID': idOf,
+    'Name': nameOf
+  },
+  enter: function() {
+    var view = new PersonView({model: this.model, el: $('#main')});
+    view.render();
+  }
+});
+
+var SourceBoxView = BoxView.extend({
+  fields: {
+    'ID': idOf
+  }
+});
+
+var EventBoxView = BoxView.extend({
+  fields: {
+    'ID': idOf
+  }
+});
+
+var ContainerBoxView = BoxView.extend({
+  fields: {
+    simple:['Name'],
+    'People': function(cont){ return _(cont.Persons || []).size()},
+    'ID': idOf
+  },
+  events: {
+    'click': 'enter'
+  },
+  enter: function() {
+    var view = new ContainerView({model: this.model, el: $('#main')});
+    view.render();
+  }
+});
+
+var PersonView = Backbone.View.extend({
+  render: function() {
+    this.$el.html(templates.person());
+
+    this.$el.find('#attributes').html(templates.fields({
+      obj: this.model,
+      fields: {
+        'ID': idOf,
+        'Name': nameOf
+      }
+    }));
+
+    var sources = this.$el.find('#sources');
+    var events = this.$el.find('#events');
+
+    _(this.model.Sources).each(function(src){
+      var view = new SourceBoxView({model: src});
+      view.render();
+      sources.append(view.el);
+    });
+
+    _(this.model.Events).each(function(event){
+      var view = new EventBoxView({model: event});
+      view.render();
+      events.append(view.el);
+    });
+    return this;
+  }
+});
+
+var ContainerView = Backbone.View.extend({
+  render: function() {
+    this.$el.html(templates.container());
+    var persons = this.$el.find('#people');
+    var containers = this.$el.find('#containers');
+
+    this.$el.find('#attributes').html(templates.fields({
+      obj: this.model,
+      fields: {
+        'simple': ['Name'],
+        'ID': idOf,
+      }
+    }));
+
+    _(this.model.Containers).each(function(cont){
+      var view = new ContainerBoxView({model: cont});
+      view.render();
+      containers.append(view.el);
+    });
+
+    _(this.model.Persons).each(function(person){
+      var view = new PersonBoxView({model: person});
+      view.render();
+      persons.append(view.el);
+    });
+    return this;
+  }
+});
+
+</script>
+
+<script type="template" id="tmpl-container">
+  <h2>Container</h2>
+  <section id="attributes" class ="row">
+  </section>
+
+  <h2>People</h2>
+  <section id="people" class ="row">
+  </section>
+
+  <h2>Containers</h2>
+  <section id="containers" class ="row">
+  </section>
+  </div>
+</script>
+
+<script type="template" id="tmpl-person">
+  <h2>Person</h2>
+  <section id="attributes" class ="row">
+  </section>
+
+  <h2>Sources</h2>
+  <section id="sources" class ="row">
+  </section>
+  </div>
+
+  <h2>Events</h2>
+  <section id="events" class ="row">
+  </section>
+
+</script>
+
+<script type="template" id="tmpl-fields">
+    <% _(data.fields.simple).each(function(v){ %>
+      <%= templates.keyvalue({key: v, value: data.obj[v]}) %>
+    <% }); %>
+
+    <% _(data.fields).each(function(v,k){ %>
+      <%if(k == 'simple') return; %>
+      <%= templates.keyvalue({key: k, value: v(data.obj)})%>
+    <% }); %>
+</script>
+
+<script type="template" id="tmpl-box">
+  <div class="box span3">
+    <%= templates.fields(data) %>
+  </div>
+</script>
+
+<script type="template" id="tmpl-keyvalue">
+  <div>
+    <span class="field"><%= data.key %>:</span>
+    <span class="value"><%- data.value %></span>
+  </div>
+</script>
+
+</body>
+</html>
