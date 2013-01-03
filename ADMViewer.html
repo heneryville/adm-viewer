@@ -61,7 +61,7 @@ function load(path, data) {
   var type = examineType(at);
   console.log(type);
   if(type == "container") {
-    var view = new ContainerView({model: {path: "$", at, el: $('#main')});
+    var view = new ContainerView({model: data, el: $('#main')});
   }else if(type == "person") {
     var view = new PersonView({model: at, el: $('#main')});
   }
